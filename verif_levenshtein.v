@@ -198,9 +198,7 @@ Qed.
 (* ================================================================ *)
 
 (** Calloc spec: allocates an array of [n] unsigned longs.
-    AXIOM: we assume calloc succeeds (returns non-NULL).
-    The C code does not check for NULL after calloc, so it has
-    undefined behavior if calloc fails. We axiomatize success. *)
+    This spec permits a NULL result (allocation failure). *)
 Definition calloc_spec :=
   DECLARE _calloc
   WITH n : Z, gv : globals
@@ -216,8 +214,12 @@ Definition calloc_spec :=
     PROP ()
     RETURN (p)
     SEP (mem_mgr gv;
-         malloc_token Ews (tarray tulong n) p;
-         data_at_ Ews (tarray tulong n) p).
+         if eq_dec p nullval
+         then emp
+         else malloc_token Ews (tarray tulong n) p;
+         if eq_dec p nullval
+         then emp
+         else data_at_ Ews (tarray tulong n) p).
 
 (** Helper: convert a list of bytes to a list of Z (unsigned values). *)
 Definition bytes_to_Z (bs : list byte) : list Z :=
@@ -291,9 +293,11 @@ Definition levenshtein_n_spec :=
          data_at sh_a (tarray tschar la) (map Vbyte a_contents) a_ptr;
          data_at sh_b (tarray tschar lb) (map Vbyte b_contents) b_ptr)
   POST [ tulong ]
-    PROP ()
-    RETURN (Vlong (Int64.repr
-              (lev_dp (bytes_to_Z a_contents) (bytes_to_Z b_contents))))
+    EX ret : val,
+    PROP (ret = Vlong (Int64.repr
+                 (lev_dp (bytes_to_Z a_contents) (bytes_to_Z b_contents))) \/
+          ret = Vlong (Int64.repr (la + lb)))
+    RETURN (ret)
     SEP (mem_mgr gv;
          data_at sh_a (tarray tschar la) (map Vbyte a_contents) a_ptr;
          data_at sh_b (tarray tschar lb) (map Vbyte b_contents) b_ptr).
@@ -1057,29 +1061,30 @@ Proof.
 
   (* ==== if (length == 0) return bLength ==== *)
   forward_if.
-  { forward. entailer!.
+  { forward.
     assert (Hla0 : Zlength a_contents = 0).
     { change Int64.zero with (Int64.repr 0) in H5.
       apply (f_equal Int64.unsigned) in H5.
       rewrite !Int64.unsigned_repr in H5 by rep_lia.
       exact H5. }
-    unfold lev_dp, bytes_to_Z.
-    rewrite !Zlength_map, Hla0. reflexivity. }
+    Exists (Vlong (Int64.repr (Zlength a_contents + Zlength b_contents))).
+    entailer!.
+    rewrite Hla0.
+    replace (0 + Zlength b_contents)%Z with (Zlength b_contents) by lia.
+    reflexivity. }
 
   (* ==== if (bLength == 0) return length ==== *)
   forward_if.
-  { forward. entailer!.
+  { forward.
     assert (Hlb0 : Zlength b_contents = 0).
     { change Int64.zero with (Int64.repr 0) in H6.
       apply (f_equal Int64.unsigned) in H6.
       rewrite !Int64.unsigned_repr in H6 by rep_lia.
       exact H6. }
-    assert (Hla_ne : Zlength a_contents <> 0).
-    { intro Heq. apply H5. f_equal. exact Heq. }
-    unfold lev_dp, bytes_to_Z.
-    rewrite !Zlength_map, Hlb0.
-    replace (Zlength a_contents =? 0)%Z with false
-      by (symmetry; apply Z.eqb_neq; exact Hla_ne).
+    Exists (Vlong (Int64.repr (Zlength a_contents + Zlength b_contents))).
+    entailer!.
+    rewrite Hlb0.
+    replace (Zlength a_contents + 0)%Z with (Zlength a_contents) by lia.
     reflexivity. }
 
   (* ==== cache = calloc(length, sizeof(size_t)) ==== *)
@@ -1088,11 +1093,25 @@ Proof.
       by (intro Heq; apply H5; f_equal; exact Heq).
     split; [lia | apply H4; lia]. }
   Intros cache_ptr.
-  forward. (* index = 0 *)
+  (* ==== if (cache == NULL) return length + bLength ==== *)
+  forward_if.
+  - change (Vlong (Int64.repr 0)) with nullval.
+    destruct (eq_dec cache_ptr nullval) as [Hnull | Hnull].
+    + subst cache_ptr.
+      apply denote_tc_test_eq_split; apply valid_pointer_null.
+    + apply denote_tc_test_eq_split.
+      * entailer!.
+      * apply valid_pointer_null.
+  - forward.
+    Exists (Vlong (Int64.repr (Zlength a_contents + Zlength b_contents))).
+    entailer!.
+  - { forward. (* index = 0 *)
+      rewrite if_false by exact H7.
+      rewrite if_false by exact H7.
 
-  (* ==== Init loop ==== *)
-  forward_while (init_loop_inv sh_a sh_b a_ptr b_ptr cache_ptr
-                               a_contents b_contents la lb gv).
+        (* ==== Init loop ==== *)
+        forward_while (init_loop_inv sh_a sh_b a_ptr b_ptr cache_ptr
+                                     a_contents b_contents la lb gv).
   - (* entry: i=0 *)
     Exists 0. entailer!.
     simpl. unfold data_at_. cancel.
@@ -1204,10 +1223,14 @@ Proof.
         entailer!; try (repeat split; reflexivity).
       * entailer!.
       * assert (Hidx : 0 <= idx < la).
-        { destruct H10 as [Hidx0 HidxLe].
+        { assert (Hidx_bounds : 0 <= idx <= la).
+          { match goal with
+            | Hinv_idx : 0 <= idx <= la |- _ => exact Hinv_idx
+            end. }
+          destruct Hidx_bounds as [Hidx0 HidxLe].
           apply Int64.ltu_inv in HRE1 as [_ Hlt].
           rewrite !Int64.unsigned_repr in Hlt by rep_lia.
-          split; [assumption|lia]. }
+          split; [exact Hidx0|lia]. }
         assert (Hidx_a : 0 <= idx < Zlength a_contents) by (rewrite H; exact Hidx).
         forward. (* t'2 = a[index] *)
         set (a_i := Znth idx (a_Z a_contents)).
@@ -1268,9 +1291,12 @@ Proof.
            ++ destruct (inner_loop_n (a_Z a_contents) b_char old_cache k k (Z.to_nat idx))
                 as [[prefix d] r] eqn:Hinner.
               simpl in H12.
-              destruct H12 as [_ [_ Hprefix_len]].
+              destruct H13 as [_ [_ Hprefix_len]].
               assert (Hidx_old : 0 <= idx < Zlength old_cache).
-              { rewrite H11. exact Hidx. }
+              { match goal with
+                | Hlen_old : Zlength old_cache = la |- _ => rewrite Hlen_old
+                end.
+                exact Hidx. }
               assert (Hznth_cur :
                 Znth idx
                   (cache_to_val prefix ++ cache_to_val (skipn (Z.to_nat idx) old_cache))
@@ -1342,7 +1368,10 @@ Proof.
                         data_at sh_b (tarray tschar lb) (map Vbyte b_contents) b_ptr)).
                 { forward.
                   assert (Hidx_old : 0 <= idx < Zlength old_cache).
-                  { rewrite H11. exact Hidx. }
+                  { match goal with
+                    | Hlen_old : Zlength old_cache = la |- _ => rewrite Hlen_old
+                    end.
+                    exact Hidx. }
                   assert (Hold_bounds : Forall (fun x => 0 <= x <= la + k) old_cache).
                   { unfold old_cache.
                     apply outer_cache_bounds_coarse_Z; [exact (proj1 H1) | exact (proj1 Hk)]. }
@@ -1355,9 +1384,9 @@ Proof.
                     - unfold old_cache; reflexivity.
                     - exact (proj1 H1).
                     - exact (proj1 Hk).
-                    - exact H12. }
+                    - exact H13. }
                   assert (Hbd_bounds : 0 <= bd <= la + k + 1).
-                  { rewrite H13.
+                  { rewrite H14.
                     destruct (b_char =? a_i)%Z; lia. }
                   assert (Hmax_k1 : la + k + 1 <= Int64.max_unsigned) by lia.
                   assert (Hres_range : 0 <= res <= Int64.max_unsigned) by lia.
@@ -1372,14 +1401,14 @@ Proof.
                     = Vlong (Int64.repr c_i)).
                   { eapply cache_current_from_inner_inv.
                     - unfold c_i; reflexivity.
-                    - exact H12.
+                    - exact H13.
                     - exact Hidx_old. }
-                  setoid_rewrite Hcur in H14.
-                  simpl in H14.
+                  setoid_rewrite Hcur in H15.
+                  simpl in H15.
                   assert (Hci_gt_res : res < c_i).
-                  { from_typed_true_ltu H14. exact H14. }
-                  assert (Hbd_gt_res : res < bd).
                   { from_typed_true_ltu H15. exact H15. }
+                  assert (Hbd_gt_res : res < bd).
+                  { from_typed_true_ltu H16. exact H16. }
                   assert (Hdp : dp_min res c_i bd = res + 1).
                   { unfold dp_min.
                     assert (Hgt_ci : (c_i >? res)%Z = true) by (apply Z.gtb_lt; lia).
@@ -1390,7 +1419,10 @@ Proof.
                   entailer!. }
                 { forward.
                   assert (Hidx_old : 0 <= idx < Zlength old_cache).
-                  { rewrite H11. exact Hidx. }
+                  { match goal with
+                    | Hlen_old : Zlength old_cache = la |- _ => rewrite Hlen_old
+                    end.
+                    exact Hidx. }
                   assert (Hold_bounds :
                     Forall (fun x => 0 <= x <= la + k) old_cache).
                   { unfold old_cache.
@@ -1407,7 +1439,7 @@ Proof.
                     - unfold old_cache; reflexivity.
                     - exact (proj1 H1).
                     - exact (proj1 Hk).
-                    - exact H12. }
+                    - exact H13. }
                   assert (Hbd_bounds :
                     0 <= (if b_char =? a_i then dist else dist + 1)
                       <= la + k + 1).
@@ -1426,17 +1458,17 @@ Proof.
                     = Vlong (Int64.repr c_i)).
                   { eapply cache_current_from_inner_inv.
                     - unfold c_i; reflexivity.
-                    - exact H12.
+                    - exact H13.
                     - exact Hidx_old. }
-                  setoid_rewrite Hcur in H14.
-                  simpl in H14.
+                  setoid_rewrite Hcur in H15.
+                  simpl in H15.
                   assert (Hci_gt_res : res < c_i).
-                  { from_typed_true_ltu H14. exact H14. }
+                  { from_typed_true_ltu H15. exact H15. }
                   assert (Hbd_le_res :
                     (if b_char =? a_i then dist else dist + 1) <= res).
-                  { rewrite H13 in H15.
-                    from_typed_false_ltu H15.
-                    exact H15. }
+                  { rewrite H14 in H16.
+                    from_typed_false_ltu H16.
+                    exact H16. }
                   Exists (if b_char =? a_i then dist else dist + 1).
                   entailer!.
                   unfold dp_min.
@@ -1480,7 +1512,10 @@ Proof.
                         data_at sh_b (tarray tschar lb) (map Vbyte b_contents) b_ptr)).
                 { forward.
                   assert (Hidx_old : 0 <= idx < Zlength old_cache).
-                  { rewrite H11. exact Hidx. }
+                  { match goal with
+                    | Hlen_old : Zlength old_cache = la |- _ => rewrite Hlen_old
+                    end.
+                    exact Hidx. }
                   assert (Hold_bounds : Forall (fun x => 0 <= x <= la + k) old_cache).
                   { unfold old_cache.
                     apply outer_cache_bounds_coarse_Z; [exact (proj1 H1) | exact (proj1 Hk)]. }
@@ -1494,7 +1529,7 @@ Proof.
                     - unfold old_cache; reflexivity.
                     - exact (proj1 H1).
                     - exact (proj1 Hk).
-                    - exact H12. }
+                    - exact H13. }
                   assert (Hbd_bounds :
                     0 <= (if b_char =? a_i then dist else dist + 1) <= la + k + 1).
                   { destruct Hdist_res_bounds as [Hdist_bounds _].
@@ -1512,17 +1547,17 @@ Proof.
                     = Vlong (Int64.repr c_i)).
                   { eapply cache_current_from_inner_inv.
                     - unfold c_i; reflexivity.
-                    - exact H12.
+                    - exact H13.
                     - exact Hidx_old. }
-                  setoid_rewrite Hcur in H14.
                   setoid_rewrite Hcur in H15.
-                  simpl in H14, H15.
+                  setoid_rewrite Hcur in H16.
+                  simpl in H15, H16.
                   assert (Hci_le_res : c_i <= res).
-                  { from_typed_false_ltu H14. exact H14. }
+                  { from_typed_false_ltu H15. exact H15. }
                   assert (Hbd_gt_ci : c_i < (if b_char =? a_i then dist else dist + 1)).
-                  { rewrite H13 in H15.
-                    from_typed_true_ltu H15.
-                    exact H15. }
+                  { rewrite H14 in H16.
+                    from_typed_true_ltu H16.
+                    exact H16. }
                   assert (Hdp :
                     dp_min res c_i (if b_char =? a_i then dist else dist + 1) = c_i + 1).
                   { unfold dp_min.
@@ -1591,7 +1626,10 @@ Proof.
                   entailer!. }
                 { forward.
                   assert (Hidx_old2 : 0 <= idx < Zlength old_cache).
-                  { rewrite H11. exact Hidx. }
+                  { match goal with
+                    | Hlen_old : Zlength old_cache = la |- _ => rewrite Hlen_old
+                    end.
+                    exact Hidx. }
                   assert (Hold_bounds :
                     Forall (fun x => 0 <= x <= la + k) old_cache).
                   { unfold old_cache.
@@ -1606,9 +1644,9 @@ Proof.
                     - unfold old_cache; reflexivity.
                     - exact (proj1 H1).
                     - exact (proj1 Hk).
-                    - exact H12. }
+                    - exact H13. }
                   assert (Hbd_bounds : 0 <= bd <= la + k + 1).
-                  { rewrite H13.
+                  { rewrite H14.
                     destruct (b_char =? a_i)%Z; lia. }
                   assert (Hmax_k1 : la + k + 1 <= Int64.max_unsigned) by lia.
                   assert (Hres_range : 0 <= res <= Int64.max_unsigned) by lia.
@@ -1622,17 +1660,17 @@ Proof.
                     = Vlong (Int64.repr c_i)).
                   { eapply cache_current_from_inner_inv.
                     - unfold c_i; reflexivity.
-                    - exact H12.
+                    - exact H13.
                     - exact Hidx_old2. }
-                  setoid_rewrite Hcur in H14.
                   setoid_rewrite Hcur in H15.
-                  simpl in H14, H15.
+                  setoid_rewrite Hcur in H16.
+                  simpl in H15, H16.
                   assert (Hci_le_res : c_i <= res).
-                  { from_typed_false_ltu H14. exact H14. }
-                  assert (Hbd_le_ci : bd <= c_i).
                   { from_typed_false_ltu H15. exact H15. }
+                  assert (Hbd_le_ci : bd <= c_i).
+                  { from_typed_false_ltu H16. exact H16. }
                   assert (Hif_le_ci : (if b_char =? a_i then dist else dist + 1) <= c_i).
-                  { rewrite <- H13. exact Hbd_le_ci. }
+                  { rewrite <- H14. exact Hbd_le_ci. }
                   Exists bd.
                   entailer!.
                   unfold dp_min.
@@ -1652,11 +1690,14 @@ Proof.
                 forward.
                 Exists (idx + 1, c_i, new_res).
                 assert (Hidx_old : 0 <= idx < Zlength old_cache).
-                { rewrite H11. exact Hidx. }
+                { match goal with
+                  | Hlen_old : Zlength old_cache = la |- _ => rewrite Hlen_old
+                  end.
+                  exact Hidx. }
                 destruct (inner_loop_n (a_Z a_contents) b_char old_cache k k (Z.to_nat idx))
                   as [[prefix d] r] eqn:Hinner.
-                simpl in H12.
-                destruct H12 as [Hdist_eq [Hres_eq Hprefix_len]].
+                simpl in H13.
+                destruct H13 as [Hdist_eq [Hres_eq Hprefix_len]].
                 assert (Hcur :
                   Znth idx
                     (cache_to_val prefix ++ cache_to_val (skipn (Z.to_nat idx) old_cache))
@@ -1676,10 +1717,8 @@ Proof.
                 rewrite Hinner in Hstep.
                 simpl in Hstep.
                 rewrite <- Hdist_eq, <- Hres_eq in Hstep.
-                unfold a_i in H13.
-                rewrite <- H13 in Hstep.
-                unfold c_i in H14.
-                rewrite <- H14 in Hstep.
+                unfold a_i in Hstep.
+                unfold c_i in Hstep.
                 rewrite (cache_update_step prefix old_cache idx new_res Hprefix_len Hidx_old).
                 change (Int.signed (Int.repr 1)) with 1.
                 replace (Int64.add (Int64.repr idx) (Int64.repr 1))
@@ -1700,8 +1739,7 @@ Proof.
                 - rewrite Hstep.
                   apply derives_refl. }
       * assert (Hidx_eq : idx = la).
-        { destruct H10 as [Hidx0 HidxLe].
-          assert (Hge : la <= idx).
+        { assert (Hge : la <= idx).
           { unfold Int64.ltu in HRE1.
             rewrite !Int64.unsigned_repr in HRE1 by rep_lia.
             destruct (zlt idx la); [discriminate | lia]. }
@@ -1710,7 +1748,7 @@ Proof.
         destruct (inner_loop_n (a_Z a_contents) b_char old_cache k k (Z.to_nat la))
           as [[prefix d] r] eqn:Hinner.
         simpl in H12.
-        destruct H12 as [Hdist_eq [Hres_eq Hprefix_len]].
+        destruct H13 as [Hdist_eq [Hres_eq Hprefix_len]].
         assert (Hla_nat : Z.to_nat la = length (a_Z a_contents)).
         { unfold a_Z, bytes_to_Z.
           rewrite length_map.
@@ -1719,7 +1757,9 @@ Proof.
           reflexivity. }
         assert (Hold_nat : length old_cache = Z.to_nat la).
         { rewrite <- ZtoNat_Zlength.
-          rewrite H11.
+          match goal with
+          | Hlen_old : Zlength old_cache = la |- _ => rewrite Hlen_old
+          end.
           reflexivity. }
         assert (Hlen_nat : length (a_Z a_contents) = length old_cache) by lia.
         pose proof (inner_loop_n_full (a_Z a_contents) b_char old_cache k k Hlen_nat) as Hfull.
@@ -1774,7 +1814,11 @@ Proof.
 
       (* ==== free and return ==== *)
       assert (Hk_eq : k = lb).
-      { destruct H7 as [Hk0 HkLe].
+      { assert (Hk_bounds : 0 <= k <= lb).
+        { match goal with
+          | Hb : 0 <= k <= lb |- _ => exact Hb
+          end. }
+        destruct Hk_bounds as [Hk0 HkLe].
         assert (Hge : lb <= k).
         { unfold Int64.ltu in HRE0.
           rewrite !Int64.unsigned_repr in HRE0 by rep_lia.
@@ -1795,6 +1839,8 @@ Proof.
         { apply data_at_data_at_. }
         cancel.
       * forward.
+        Exists (Vlong (Int64.repr
+                  (lev_dp (bytes_to_Z a_contents) (bytes_to_Z b_contents)))).
         entailer!.
         unfold lev_dp, bytes_to_Z.
         rewrite !Zlength_map.
@@ -1807,7 +1853,7 @@ Proof.
         unfold a_Z, b_Z, bytes_to_Z.
         repeat rewrite Zlength_correct.
         rewrite Nat2Z.id.
-        reflexivity.
+        reflexivity. }
 Qed.
 
 (* ================================================================ *)

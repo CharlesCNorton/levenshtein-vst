@@ -21,9 +21,13 @@
 
 6. Extraction alignment was handled on the Crane branch (`tests/wip/levenshtein/Levenshtein.v`).
 
+7. Nullable allocator path is now proved end-to-end:
+   - `levenshtein.c` includes `if (cache == NULL) return length + bLength;`
+   - `levenshtein.v` regenerated via `clightgen`
+   - `calloc_spec` now allows NULL
+   - `levenshtein_n_spec` models either DP result or fallback `la + lb`
+   - `body_levenshtein_n` re-closes with the new branch.
+
 ## Still open
 
-1. `calloc_spec` currently models successful allocation. To remove this assumption fully:
-   - add/retain the NULL-check path in `levenshtein.c`,
-   - regenerate `levenshtein.v`,
-   - update `verif_levenshtein.v` proof obligations for the nullable allocator branch.
+None.

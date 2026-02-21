@@ -29,6 +29,9 @@ levenshtein_n(const char *a, const size_t length,
   }
 
   cache = (size_t *)calloc(length, sizeof(size_t));
+  if (cache == NULL) {
+    return length + bLength;
+  }
 
   /* Initialize the vector: cache[i] = i + 1. */
   index = 0;

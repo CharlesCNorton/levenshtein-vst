@@ -1,4 +1,4 @@
-From Stdlib Require Import String List ZArith.
+From Coq Require Import String List ZArith.
 From compcert Require Import Coqlib Integers Floats AST Ctypes Cop Clight Clightdefs.
 Import Clightdefs.ClightNotations.
 Local Open Scope Z_scope.
@@ -126,118 +126,128 @@ Definition f_levenshtein_n := {|
             ((Etempvar _length tulong) :: (Esizeof tulong tulong) :: nil))
           (Sset _cache (Ecast (Etempvar _t'1 (tptr tvoid)) (tptr tulong))))
         (Ssequence
-          (Sset _index (Ecast (Econst_int (Int.repr 0) tint) tulong))
+          (Sifthenelse (Ebinop Oeq (Etempvar _cache (tptr tulong))
+                         (Ecast (Econst_int (Int.repr 0) tint) (tptr tvoid))
+                         tint)
+            (Sreturn (Some (Ebinop Oadd (Etempvar _length tulong)
+                             (Etempvar _bLength tulong) tulong)))
+            Sskip)
           (Ssequence
-            (Swhile
-              (Ebinop Olt (Etempvar _index tulong) (Etempvar _length tulong)
-                tint)
-              (Ssequence
-                (Sassign
-                  (Ederef
-                    (Ebinop Oadd (Etempvar _cache (tptr tulong))
-                      (Etempvar _index tulong) (tptr tulong)) tulong)
-                  (Ebinop Oadd (Etempvar _index tulong)
-                    (Econst_int (Int.repr 1) tint) tulong))
-                (Sset _index
-                  (Ebinop Oadd (Etempvar _index tulong)
-                    (Econst_int (Int.repr 1) tint) tulong))))
+            (Sset _index (Ecast (Econst_int (Int.repr 0) tint) tulong))
             (Ssequence
-              (Sset _bIndex (Ecast (Econst_int (Int.repr 0) tint) tulong))
+              (Swhile
+                (Ebinop Olt (Etempvar _index tulong)
+                  (Etempvar _length tulong) tint)
+                (Ssequence
+                  (Sassign
+                    (Ederef
+                      (Ebinop Oadd (Etempvar _cache (tptr tulong))
+                        (Etempvar _index tulong) (tptr tulong)) tulong)
+                    (Ebinop Oadd (Etempvar _index tulong)
+                      (Econst_int (Int.repr 1) tint) tulong))
+                  (Sset _index
+                    (Ebinop Oadd (Etempvar _index tulong)
+                      (Econst_int (Int.repr 1) tint) tulong))))
               (Ssequence
-                (Swhile
-                  (Ebinop Olt (Etempvar _bIndex tulong)
-                    (Etempvar _bLength tulong) tint)
-                  (Ssequence
+                (Sset _bIndex (Ecast (Econst_int (Int.repr 0) tint) tulong))
+                (Ssequence
+                  (Swhile
+                    (Ebinop Olt (Etempvar _bIndex tulong)
+                      (Etempvar _bLength tulong) tint)
                     (Ssequence
-                      (Sset _t'3
-                        (Ederef
-                          (Ebinop Oadd (Etempvar _b (tptr tschar))
-                            (Etempvar _bIndex tulong) (tptr tschar)) tschar))
-                      (Sset _code (Ecast (Etempvar _t'3 tschar) tschar)))
-                    (Ssequence
-                      (Sset _result (Etempvar _bIndex tulong))
                       (Ssequence
-                        (Sset _distance (Etempvar _bIndex tulong))
+                        (Sset _t'3
+                          (Ederef
+                            (Ebinop Oadd (Etempvar _b (tptr tschar))
+                              (Etempvar _bIndex tulong) (tptr tschar))
+                            tschar))
+                        (Sset _code (Ecast (Etempvar _t'3 tschar) tschar)))
+                      (Ssequence
+                        (Sset _result (Etempvar _bIndex tulong))
                         (Ssequence
-                          (Sset _bIndex
-                            (Ebinop Oadd (Etempvar _bIndex tulong)
-                              (Econst_int (Int.repr 1) tint) tulong))
+                          (Sset _distance (Etempvar _bIndex tulong))
                           (Ssequence
-                            (Sset _index
-                              (Ecast (Econst_int (Int.repr 0) tint) tulong))
-                            (Swhile
-                              (Ebinop Olt (Etempvar _index tulong)
-                                (Etempvar _length tulong) tint)
-                              (Ssequence
+                            (Sset _bIndex
+                              (Ebinop Oadd (Etempvar _bIndex tulong)
+                                (Econst_int (Int.repr 1) tint) tulong))
+                            (Ssequence
+                              (Sset _index
+                                (Ecast (Econst_int (Int.repr 0) tint) tulong))
+                              (Swhile
+                                (Ebinop Olt (Etempvar _index tulong)
+                                  (Etempvar _length tulong) tint)
                                 (Ssequence
-                                  (Sset _t'2
-                                    (Ederef
-                                      (Ebinop Oadd
-                                        (Etempvar _a (tptr tschar))
-                                        (Etempvar _index tulong)
-                                        (tptr tschar)) tschar))
-                                  (Sifthenelse (Ebinop Oeq
-                                                 (Etempvar _code tschar)
-                                                 (Etempvar _t'2 tschar) tint)
-                                    (Sset _bDistance
-                                      (Etempvar _distance tulong))
-                                    (Sset _bDistance
-                                      (Ebinop Oadd
-                                        (Etempvar _distance tulong)
-                                        (Econst_int (Int.repr 1) tint)
-                                        tulong))))
-                                (Ssequence
-                                  (Sset _distance
-                                    (Ederef
-                                      (Ebinop Oadd
-                                        (Etempvar _cache (tptr tulong))
-                                        (Etempvar _index tulong)
-                                        (tptr tulong)) tulong))
                                   (Ssequence
-                                    (Sifthenelse (Ebinop Ogt
-                                                   (Etempvar _distance tulong)
-                                                   (Etempvar _result tulong)
+                                    (Sset _t'2
+                                      (Ederef
+                                        (Ebinop Oadd
+                                          (Etempvar _a (tptr tschar))
+                                          (Etempvar _index tulong)
+                                          (tptr tschar)) tschar))
+                                    (Sifthenelse (Ebinop Oeq
+                                                   (Etempvar _code tschar)
+                                                   (Etempvar _t'2 tschar)
                                                    tint)
+                                      (Sset _bDistance
+                                        (Etempvar _distance tulong))
+                                      (Sset _bDistance
+                                        (Ebinop Oadd
+                                          (Etempvar _distance tulong)
+                                          (Econst_int (Int.repr 1) tint)
+                                          tulong))))
+                                  (Ssequence
+                                    (Sset _distance
+                                      (Ederef
+                                        (Ebinop Oadd
+                                          (Etempvar _cache (tptr tulong))
+                                          (Etempvar _index tulong)
+                                          (tptr tulong)) tulong))
+                                    (Ssequence
                                       (Sifthenelse (Ebinop Ogt
-                                                     (Etempvar _bDistance tulong)
+                                                     (Etempvar _distance tulong)
                                                      (Etempvar _result tulong)
                                                      tint)
-                                        (Sset _result
+                                        (Sifthenelse (Ebinop Ogt
+                                                       (Etempvar _bDistance tulong)
+                                                       (Etempvar _result tulong)
+                                                       tint)
+                                          (Sset _result
+                                            (Ebinop Oadd
+                                              (Etempvar _result tulong)
+                                              (Econst_int (Int.repr 1) tint)
+                                              tulong))
+                                          (Sset _result
+                                            (Etempvar _bDistance tulong)))
+                                        (Sifthenelse (Ebinop Ogt
+                                                       (Etempvar _bDistance tulong)
+                                                       (Etempvar _distance tulong)
+                                                       tint)
+                                          (Sset _result
+                                            (Ebinop Oadd
+                                              (Etempvar _distance tulong)
+                                              (Econst_int (Int.repr 1) tint)
+                                              tulong))
+                                          (Sset _result
+                                            (Etempvar _bDistance tulong))))
+                                      (Ssequence
+                                        (Sassign
+                                          (Ederef
+                                            (Ebinop Oadd
+                                              (Etempvar _cache (tptr tulong))
+                                              (Etempvar _index tulong)
+                                              (tptr tulong)) tulong)
+                                          (Etempvar _result tulong))
+                                        (Sset _index
                                           (Ebinop Oadd
-                                            (Etempvar _result tulong)
-                                            (Econst_int (Int.repr 1) tint)
-                                            tulong))
-                                        (Sset _result
-                                          (Etempvar _bDistance tulong)))
-                                      (Sifthenelse (Ebinop Ogt
-                                                     (Etempvar _bDistance tulong)
-                                                     (Etempvar _distance tulong)
-                                                     tint)
-                                        (Sset _result
-                                          (Ebinop Oadd
-                                            (Etempvar _distance tulong)
-                                            (Econst_int (Int.repr 1) tint)
-                                            tulong))
-                                        (Sset _result
-                                          (Etempvar _bDistance tulong))))
-                                    (Ssequence
-                                      (Sassign
-                                        (Ederef
-                                          (Ebinop Oadd
-                                            (Etempvar _cache (tptr tulong))
                                             (Etempvar _index tulong)
-                                            (tptr tulong)) tulong)
-                                        (Etempvar _result tulong))
-                                      (Sset _index
-                                        (Ebinop Oadd (Etempvar _index tulong)
-                                          (Econst_int (Int.repr 1) tint)
-                                          tulong)))))))))))))
-                (Ssequence
-                  (Scall None
-                    (Evar _free (Tfunction ((tptr tvoid) :: nil) tvoid
-                                  cc_default))
-                    ((Etempvar _cache (tptr tulong)) :: nil))
-                  (Sreturn (Some (Etempvar _result tulong))))))))))))
+                                            (Econst_int (Int.repr 1) tint)
+                                            tulong)))))))))))))
+                  (Ssequence
+                    (Scall None
+                      (Evar _free (Tfunction ((tptr tvoid) :: nil) tvoid
+                                    cc_default))
+                      ((Etempvar _cache (tptr tulong)) :: nil))
+                    (Sreturn (Some (Etempvar _result tulong)))))))))))))
 |}.
 
 Definition composites : list composite_definition :=
@@ -533,4 +543,5 @@ Definition public_idents : list ident :=
 
 Definition prog : Clight.program := 
   mkprogram composites global_definitions public_idents _main Logic.I.
+
 
