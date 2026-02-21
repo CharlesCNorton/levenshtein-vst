@@ -1,0 +1,26 @@
+opam-version: "2.0"
+synopsis: "VST verification of a C Levenshtein implementation"
+description: "Standalone VST proof artifacts for verifying a C implementation of Levenshtein distance against a Coq DP model."
+maintainer: "charlescnorton@users.noreply.github.com"
+authors: "Charles C. Norton"
+license: "MIT"
+homepage: "https://github.com/CharlesCNorton/levenshtein-vst"
+bug-reports: "https://github.com/CharlesCNorton/levenshtein-vst/issues"
+dev-repo: "git+https://github.com/CharlesCNorton/levenshtein-vst.git"
+depends: [
+  "ocaml" {>= "4.14.0"}
+  "coq" {>= "9.0" & < "9.2~"}
+  "coq-compcert" {= "3.16"}
+  "coq-vst" {= "2.16"}
+]
+build: [
+  ["coqc" "-Q" "." "levenshtein_vst" "levenshtein.v"]
+  ["coqc" "-Q" "." "levenshtein_vst" "verif_levenshtein.v"]
+]
+tags: [
+  "coq"
+  "vst"
+  "compcert"
+  "verification"
+  "levenshtein"
+]

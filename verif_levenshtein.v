@@ -4,7 +4,7 @@
    which is then shown equivalent to the intrinsically-verified Rocq
    implementation from bloomberg/crane (PR #17). *)
 
-From Coq Require Import String List ZArith Lia.
+From Stdlib Require Import String List ZArith Lia.
 From compcert Require Import Coqlib Integers Floats AST Ctypes Cop Clight Clightdefs.
 From VST Require Import floyd.proofauto floyd.library.
 Require Import levenshtein_vst.levenshtein.
@@ -164,7 +164,7 @@ Lemma init_cache_Zlength : forall la,
   0 <= la -> Zlength (init_cache la) = la.
 Proof.
   intros la Hla. unfold init_cache.
-  rewrite Zlength_map, Zlength_correct, seq_length.
+  rewrite Zlength_map, Zlength_correct, length_seq.
   lia.
 Qed.
 
@@ -542,7 +542,7 @@ Proof.
     rewrite init_cache_nth; try lia.
     reflexivity.
   - unfold init_cache.
-    rewrite map_length, seq_length.
+    rewrite length_map, length_seq.
     apply Z2Nat.inj_lt; lia.
 Qed.
 
@@ -1154,7 +1154,7 @@ Proof.
             reflexivity. }
         assert (Hlen_ai : length (a_Z a_contents) = length (init_cache la)).
         { unfold a_Z, bytes_to_Z, init_cache.
-          rewrite !map_length, seq_length.
+          rewrite !length_map, length_seq.
           apply (f_equal Z.to_nat) in H.
           rewrite ZtoNat_Zlength in H.
           exact H. }
@@ -1675,7 +1675,7 @@ Proof.
         destruct H12 as [Hdist_eq [Hres_eq Hprefix_len]].
         assert (Hla_nat : Z.to_nat la = length (a_Z a_contents)).
         { unfold a_Z, bytes_to_Z.
-          rewrite map_length.
+          rewrite length_map.
           rewrite <- ZtoNat_Zlength.
           rewrite H.
           reflexivity. }
