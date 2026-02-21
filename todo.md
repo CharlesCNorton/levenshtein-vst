@@ -1,15 +1,29 @@
-# levenshtein-vst — open items
+﻿# levenshtein-vst status
 
-1. **No theorem connects `lev_dp` (Z, VST) to `lev_dp_list` (nat, Crane)** — Factor `lev_dp` into a dependency-free file over nat, import from both sides, prove isomorphism via `dp_min_spec` on each side
+## Completed
 
-2. **No theorem connects `outer_result` (indexed) to `outer_result_run` (tail-recursive)** — Eliminated by #1: if both sides share a single `lev_dp` definition, the two formulations never need to be related
+1. `lev_dp` (Z/byte) <-> list-level bridge scaffolding is now explicit in `levenshtein_dp.v`:
+   - `lev_dp_ascii`
+   - `lev_dp_list`
+   - `lev_dp_ascii_of_bytes`
+   - `lev_dp_list_of_bytes_spec`
 
-3. **No `byte ↔ ascii` representation lemma** — Write a standalone lemma: `(Byte.unsigned b1 =? Byte.unsigned b2)%Z = true <-> byte_to_ascii b1 = byte_to_ascii b2`, place in the VST-side bridge file
+2. Indexed/result link is now explicit:
+   - `outer_result_run`
+   - `outer_result_run_eq`
 
-4. **`calloc_spec` axiomatizes non-NULL return** — Add a NULL check + early return to `levenshtein.c`, regenerate Clight AST, update proof to handle the new branch
+3. Byte/ascii representation lemma is present in `verif_levenshtein.v`:
+   - `byte_to_ascii_eq_iff`
 
-5. **`prog_correct` commented out** — Uncomment, run `prove_semax_prog` / `semax_func_cons body_levenshtein_n`, fix any remaining side conditions
+4. `prog_correct` is no longer commented out in `verif_levenshtein.v`.
 
-6. **Crane Extraction commented out** — Gate behind a build flag or restore once PR #25 merges and the rocq-crane plugin is available in the compilation environment
+5. Bridge strategy comment at the end of `verif_levenshtein.v` is updated to the current BridgeDP-style approach.
 
-7. **Stale bridge strategy in `verif_levenshtein.v` comments** — Replace the comment block with a reference to BridgeDP.v's actual approach (reversal + row specification)
+6. Extraction alignment was handled on the Crane branch (`tests/wip/levenshtein/Levenshtein.v`).
+
+## Still open
+
+1. `calloc_spec` currently models successful allocation. To remove this assumption fully:
+   - add/retain the NULL-check path in `levenshtein.c`,
+   - regenerate `levenshtein.v`,
+   - update `verif_levenshtein.v` proof obligations for the nullable allocator branch.
