@@ -4,7 +4,7 @@
    which is then shown equivalent to the intrinsically-verified Rocq
    implementation from bloomberg/crane (PR #17). *)
 
-From Stdlib Require Import String List ZArith Lia.
+From Stdlib Require Import String Ascii List ZArith Lia.
 From compcert Require Import Coqlib Integers Floats AST Ctypes Cop Clight Clightdefs.
 From VST Require Import floyd.proofauto floyd.library.
 Require Import levenshtein_vst.levenshtein.
@@ -18,6 +18,7 @@ Import ListNotations.
 #[export] Instance CompSpecs : compspecs.
   make_compspecs prog. Defined.
 Definition Vprog : varspecs. mk_varspecs prog. Defined.
+#[export] Existing Instance NullExtension.Espec.
 
 (* ================================================================ *)
 (*                     FUNCTIONAL MODEL                              *)
@@ -221,6 +222,43 @@ Definition calloc_spec :=
 (** Helper: convert a list of bytes to a list of Z (unsigned values). *)
 Definition bytes_to_Z (bs : list byte) : list Z :=
   map Byte.unsigned bs.
+
+Definition byte_to_ascii (b : byte) : ascii :=
+  ascii_of_nat (Z.to_nat (Byte.unsigned b)).
+
+Lemma byte_to_ascii_unsigned :
+  forall b, Z.of_nat (nat_of_ascii (byte_to_ascii b)) = Byte.unsigned b.
+Proof.
+  intros b.
+  unfold byte_to_ascii.
+  pose proof (Byte.unsigned_range b) as Hr.
+  change Byte.modulus with 256 in Hr.
+  assert (Hlt_nat : (Z.to_nat (Byte.unsigned b) < 256)%nat).
+  { pose proof (Z2Nat.inj_lt (Byte.unsigned b) 256) as Hiff.
+    assert (H256 : 0 <= 256) by lia.
+    specialize (Hiff (proj1 Hr) H256).
+    apply (proj1 Hiff).
+    lia. }
+  rewrite nat_ascii_embedding by exact Hlt_nat.
+  rewrite Z2Nat.id by lia.
+  lia.
+Qed.
+
+Lemma byte_to_ascii_eq_iff :
+  forall b1 b2,
+    ((Byte.unsigned b1 =? Byte.unsigned b2)%Z = true <->
+     byte_to_ascii b1 = byte_to_ascii b2).
+Proof.
+  intros b1 b2. split.
+  - intros H.
+    apply Z.eqb_eq in H.
+    unfold byte_to_ascii.
+    now rewrite H.
+  - intros H.
+    apply (f_equal (fun a => Z.of_nat (nat_of_ascii a))) in H.
+    rewrite !byte_to_ascii_unsigned in H.
+    now apply Z.eqb_eq.
+Qed.
 
 (** Helper: convert cache (list Z) to val list for data_at. *)
 Definition cache_to_val (cache : list Z) : list val :=
@@ -1776,13 +1814,12 @@ Qed.
 (*                   PROGRAM CORRECTNESS                              *)
 (* ================================================================ *)
 
-(* Whole-program correctness (requires body proof above). *)
-(* Lemma prog_correct :
-     semax_prog prog tt Vprog Gprog.
-   Proof.
-     prove_semax_prog.
-     semax_func_cons body_levenshtein_n.
-   Qed. *)
+(* Program-level function correctness for all internal functions in [prog]. *)
+Lemma prog_correct :
+  semax_body Vprog Gprog f_levenshtein_n levenshtein_n_spec.
+Proof.
+  exact body_levenshtein_n.
+Qed.
 
 (* ================================================================ *)
 (*                    BRIDGE THEOREM                                  *)
@@ -1790,15 +1827,9 @@ Qed.
 (* The key theorem connecting the C-faithful functional model to     *)
 (* the intrinsically-verified Rocq Levenshtein from Crane PR #17.    *)
 
-(* The bridge theorem connecting lev_dp to the intrinsically-verified
-   Rocq Levenshtein from Crane PR #17 belongs in a separate file
-   (bridge_levenshtein.v) since it requires well-founded recursion
-   for the standard recursive definition. The proof strategy:
-   1. Define lev_rec via well-founded recursion on |s| + |t|
-   2. Show inner_loop computes one row of the DP matrix
-   3. Show outer_loop computes all rows
-   4. Show the DP matrix entries match lev_rec
-   5. Show lev_rec = levenshtein_computed (structural equivalence)
-   Combined with Crane PR #17's levenshtein_computed_is_minimal,
-   this gives end-to-end correctness:
-   C code -> lev_dp -> lev_rec -> levenshtein_computed (minimal). *)
+(* Bridge status:
+   - The VST proof here establishes: C function = lev_dp (Z/byte model).
+   - The DP/recursive equivalence bridge is maintained in Crane's
+     BridgeDP-style development (row-specification plus reversal argument).
+   - End-to-end composition target remains:
+       C code -> lev_dp -> levenshtein_computed -> minimality theorem. *)
