@@ -15,7 +15,9 @@
 3. Byte/ascii representation lemma is present in `verif_levenshtein.v`:
    - `byte_to_ascii_eq_iff`
 
-4. `prog_correct` is no longer commented out in `verif_levenshtein.v`.
+4. `prog_correct` in `verif_levenshtein.v` is tightened to a
+   translation-unit theorem:
+   - `semax_func Vprog Gprog (globalenv prog) [(_levenshtein_n, Internal f_levenshtein_n)] [levenshtein_n_spec]`
 
 5. Bridge strategy comment at the end of `verif_levenshtein.v` is updated to the current BridgeDP-style approach.
 

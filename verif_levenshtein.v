@@ -296,7 +296,7 @@ Definition levenshtein_n_spec :=
     EX ret : val,
     PROP (ret = Vlong (Int64.repr
                  (lev_dp (bytes_to_Z a_contents) (bytes_to_Z b_contents))) \/
-          ret = Vlong (Int64.repr (la + lb)))
+          (0 < la /\ 0 < lb /\ ret = Vlong (Int64.repr (la + lb))))
     RETURN (ret)
     SEP (mem_mgr gv;
          data_at sh_a (tarray tschar la) (map Vbyte a_contents) a_ptr;
@@ -1067,10 +1067,11 @@ Proof.
       apply (f_equal Int64.unsigned) in H5.
       rewrite !Int64.unsigned_repr in H5 by rep_lia.
       exact H5. }
-    Exists (Vlong (Int64.repr (Zlength a_contents + Zlength b_contents))).
+    Exists (Vlong (Int64.repr (Zlength b_contents))).
     entailer!.
-    rewrite Hla0.
-    replace (0 + Zlength b_contents)%Z with (Zlength b_contents) by lia.
+    left.
+    unfold lev_dp, bytes_to_Z.
+    rewrite !Zlength_map, Hla0.
     reflexivity. }
 
   (* ==== if (bLength == 0) return length ==== *)
@@ -1081,10 +1082,15 @@ Proof.
       apply (f_equal Int64.unsigned) in H6.
       rewrite !Int64.unsigned_repr in H6 by rep_lia.
       exact H6. }
-    Exists (Vlong (Int64.repr (Zlength a_contents + Zlength b_contents))).
+    assert (Hla_ne : Zlength a_contents <> 0).
+    { intro Heq. apply H5. now rewrite Heq. }
+    Exists (Vlong (Int64.repr (Zlength a_contents))).
     entailer!.
-    rewrite Hlb0.
-    replace (Zlength a_contents + 0)%Z with (Zlength a_contents) by lia.
+    left.
+    unfold lev_dp, bytes_to_Z.
+    rewrite !Zlength_map, Hlb0.
+    replace (Zlength a_contents =? 0)%Z with false
+      by (symmetry; apply Z.eqb_neq; exact Hla_ne).
     reflexivity. }
 
   (* ==== cache = calloc(length, sizeof(size_t)) ==== *)
@@ -1105,6 +1111,16 @@ Proof.
   - forward.
     Exists (Vlong (Int64.repr (Zlength a_contents + Zlength b_contents))).
     entailer!.
+    right.
+    assert (Hla_pos : 0 < Zlength a_contents).
+    { assert (Hla_ne : Zlength a_contents <> 0).
+      { intro Heq. apply H5. now rewrite Heq. }
+      destruct H1 as [Hla0 _]. lia. }
+    assert (Hlb_pos : 0 < Zlength b_contents).
+    { assert (Hlb_ne : Zlength b_contents <> 0).
+      { intro Heq. apply H6. now rewrite Heq. }
+      destruct H2 as [Hlb0 _]. lia. }
+    repeat split; try lia; reflexivity.
   - { forward. (* index = 0 *)
       rewrite if_false by exact H7.
       rewrite if_false by exact H7.
@@ -1860,11 +1876,21 @@ Qed.
 (*                   PROGRAM CORRECTNESS                              *)
 (* ================================================================ *)
 
-(* Program-level function correctness for all internal functions in [prog]. *)
+(* Translation-unit function correctness for internal definitions in [prog]. *)
 Lemma prog_correct :
-  semax_body Vprog Gprog f_levenshtein_n levenshtein_n_spec.
+  semax_func Vprog Gprog (globalenv prog)
+    [(_levenshtein_n, Internal f_levenshtein_n)]
+    [levenshtein_n_spec].
 Proof.
-  exact body_levenshtein_n.
+  eapply semax_func_cons.
+  - vm_compute; reflexivity.
+  - simpl; constructor.
+  - simpl; constructor.
+  - reflexivity.
+  - LookupID.
+  - LookupB.
+  - exact body_levenshtein_n.
+  - apply semax_func_nil.
 Qed.
 
 (* ================================================================ *)
