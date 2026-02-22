@@ -1,4 +1,4 @@
-From Coq Require Import String List ZArith.
+From Stdlib Require Import String List ZArith.
 From compcert Require Import Coqlib Integers Floats AST Ctypes Cop Clight Clightdefs.
 Import Clightdefs.ClightNotations.
 Local Open Scope Z_scope.
@@ -543,5 +543,4 @@ Definition public_idents : list ident :=
 
 Definition prog : Clight.program := 
   mkprogram composites global_definitions public_idents _main Logic.I.
-
 

@@ -29,6 +29,16 @@ opam exec -- coqc -Q . levenshtein_vst levenshtein_dp.v
 
 The later commands depend on the earlier ones.
 
+## Regenerating `levenshtein.v`
+
+If you regenerate with CompCert `clightgen`, normalize the first import line to
+Rocq 9 style:
+
+```bash
+clightgen -normalize -shorten-idents -o levenshtein.v levenshtein.c
+sed -i '1s/^From Coq Require Import/From Stdlib Require Import/' levenshtein.v
+```
+
 ## Notes
 
 - This repo targets the Rocq 9 / VST toolchain (`coq` >= 9.0, < 9.2).
