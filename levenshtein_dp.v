@@ -84,13 +84,12 @@ Qed.
 (*     BRIDGE TO CRANE: Z-LEVEL DP = NAT-LEVEL DP                  *)
 (* ================================================================ *)
 (* Proves the Z-level Wagner-Fischer model from verif_levenshtein
-   computes the same value as the nat-level model from BridgeDP.
-   Combined with BridgeDP.lev_dp_string_eq_levenshtein_computed,
+   computes the same value as the nat-level model from Levenshtein.
+   Combined with Levenshtein.lev_dp_string_eq_levenshtein_computed,
    this closes the end-to-end chain:
      C code -> lev_dp (Z) -> lev_dp_list (nat) ->
      levenshtein_computed -> minimality. *)
 
-Require BridgeDP.
 Require Levenshtein.
 From Stdlib Require Import String.
 Local Notation length := Datatypes.length.
@@ -122,10 +121,10 @@ Qed.
 
 Lemma dp_min_Z_nat : forall r d bd : nat,
   dp_min (Z.of_nat r) (Z.of_nat d) (Z.of_nat bd) =
-  Z.of_nat (BridgeDP.dp_min r d bd).
+  Z.of_nat (Levenshtein.dp_min r d bd).
 Proof.
   intros r d bd.
-  rewrite dp_min_spec, BridgeDP.dp_min_spec.
+  rewrite dp_min_spec, Levenshtein.dp_min_spec.
   rewrite !Nat2Z.inj_min, !Nat2Z.inj_succ. lia.
 Qed.
 
@@ -136,7 +135,7 @@ Lemma inner_loop_Z_nat :
     inner_loop (map ascii_to_Z a_chars) (ascii_to_Z b_char)
                (map Z.of_nat old_cache) (Z.of_nat dist) (Z.of_nat res) =
     let '(nc, fd, fr) :=
-      BridgeDP.inner_loop a_chars b_char old_cache dist res in
+      Levenshtein.inner_loop a_chars b_char old_cache dist res in
     (map Z.of_nat nc, Z.of_nat fd, Z.of_nat fr).
 Proof.
   induction a_chars as [|a rest IH]; intros b_char old_cache dist res.
@@ -146,13 +145,13 @@ Proof.
     + simpl. rewrite ascii_eqb_Z.
       destruct (ascii_dec b_char a) as [Heq | Hneq].
       * rewrite dp_min_Z_nat, IH.
-        destruct (BridgeDP.inner_loop rest b_char cs c
-                   (BridgeDP.dp_min res c dist)) as [[rc fd] fr].
+        destruct (Levenshtein.inner_loop rest b_char cs c
+                   (Levenshtein.dp_min res c dist)) as [[rc fd] fr].
         reflexivity.
       * replace (Z.of_nat dist + 1)%Z with (Z.of_nat (S dist)) by lia.
         rewrite dp_min_Z_nat, IH.
-        destruct (BridgeDP.inner_loop rest b_char cs c
-                   (BridgeDP.dp_min res c (S dist))) as [[rc fd] fr].
+        destruct (Levenshtein.inner_loop rest b_char cs c
+                   (Levenshtein.dp_min res c (S dist))) as [[rc fd] fr].
         reflexivity.
 Qed.
 
@@ -163,12 +162,12 @@ Lemma process_row_Z_nat :
     process_row (map ascii_to_Z a_chars) (ascii_to_Z b_char)
                 (map Z.of_nat old_cache) (Z.of_nat bIdx) =
     let '(nc, fr) :=
-      BridgeDP.process_row a_chars b_char old_cache bIdx in
+      Levenshtein.process_row a_chars b_char old_cache bIdx in
     (map Z.of_nat nc, Z.of_nat fr).
 Proof.
-  intros. unfold process_row, BridgeDP.process_row.
+  intros. unfold process_row, Levenshtein.process_row.
   rewrite inner_loop_Z_nat.
-  destruct (BridgeDP.inner_loop a_chars b_char old_cache bIdx bIdx)
+  destruct (Levenshtein.inner_loop a_chars b_char old_cache bIdx bIdx)
     as [[nc fd] fr].
   reflexivity.
 Qed.
@@ -179,15 +178,15 @@ Lemma outer_cache_Z_nat :
   forall a_chars b_chars init k,
     outer_cache (map ascii_to_Z a_chars) (map ascii_to_Z b_chars)
                 (map Z.of_nat init) k =
-    map Z.of_nat (BridgeDP.outer_cache a_chars b_chars init k).
+    map Z.of_nat (Levenshtein.outer_cache a_chars b_chars init k).
 Proof.
   intros a_chars b_chars init k.
   induction k as [|k' IH]; [reflexivity|].
   simpl. rewrite IH.
   rewrite <- ascii_to_Z_zero, map_nth.
   rewrite process_row_Z_nat.
-  destruct (BridgeDP.process_row a_chars (nth k' b_chars Ascii.zero)
-             (BridgeDP.outer_cache a_chars b_chars init k') k')
+  destruct (Levenshtein.process_row a_chars (nth k' b_chars Ascii.zero)
+             (Levenshtein.outer_cache a_chars b_chars init k') k')
     as [nc fr].
   reflexivity.
 Qed.
@@ -198,15 +197,15 @@ Lemma outer_result_Z_nat :
   forall a_chars b_chars init k,
     outer_result (map ascii_to_Z a_chars) (map ascii_to_Z b_chars)
                  (map Z.of_nat init) k =
-    Z.of_nat (BridgeDP.outer_result a_chars b_chars init k).
+    Z.of_nat (Levenshtein.outer_result a_chars b_chars init k).
 Proof.
   intros a_chars b_chars init k.
   destruct k as [|k']; [reflexivity|].
   simpl. rewrite outer_cache_Z_nat.
   rewrite <- ascii_to_Z_zero, map_nth.
   rewrite process_row_Z_nat.
-  destruct (BridgeDP.process_row a_chars (nth k' b_chars Ascii.zero)
-             (BridgeDP.outer_cache a_chars b_chars init k') k')
+  destruct (Levenshtein.process_row a_chars (nth k' b_chars Ascii.zero)
+             (Levenshtein.outer_cache a_chars b_chars init k') k')
     as [nc fr].
   reflexivity.
 Qed.
@@ -215,9 +214,9 @@ Qed.
 
 Lemma init_cache_Z_nat :
   forall la : nat,
-    init_cache (Z.of_nat la) = map Z.of_nat (BridgeDP.init_cache la).
+    init_cache (Z.of_nat la) = map Z.of_nat (Levenshtein.init_cache la).
 Proof.
-  intros la. unfold init_cache, BridgeDP.init_cache.
+  intros la. unfold init_cache, Levenshtein.init_cache.
   rewrite Nat2Z.id, map_map.
   apply map_ext_in. intros n _. lia.
 Qed.
@@ -258,24 +257,24 @@ Proof.
   - destruct k as [|k']; simpl; [reflexivity | apply IH].
 Qed.
 
-(* -- outer_result_run = outer_result (BridgeDP/nat side) -- *)
+(* -- outer_result_run = outer_result (Levenshtein/nat side) -- *)
 
 Lemma outer_result_run_eq_gen :
   forall b_rem a b_all init k,
     a <> [] ->
     b_rem <> [] ->
     b_rem = skipn k b_all ->
-    BridgeDP.outer_result_run a b_rem
-      (BridgeDP.outer_cache a b_all init k) k =
-    BridgeDP.outer_result a b_all init (length b_all).
+    Levenshtein.outer_result_run a b_rem
+      (Levenshtein.outer_cache a b_all init k) k =
+    Levenshtein.outer_result a b_all init (length b_all).
 Proof.
   induction b_rem as [|x rest IH]; intros a b_all init k Ha Hne Hskip.
   - contradiction.
   - destruct rest as [|y rest'].
     + (* Single element remaining: k is the last index. *)
       simpl.
-      destruct (BridgeDP.process_row a x
-                 (BridgeDP.outer_cache a b_all init k) k)
+      destruct (Levenshtein.process_row a x
+                 (Levenshtein.outer_cache a b_all init k) k)
         as [nc fr] eqn:Hpr.
       assert (Hlen : length b_all = S k).
       { pose proof (skipn_length_eq k b_all) as Hsl.
@@ -286,15 +285,15 @@ Proof.
       rewrite Hnth, Hpr. reflexivity.
     + (* Two or more remaining: recurse. *)
       simpl.
-      destruct (BridgeDP.process_row a x
-                 (BridgeDP.outer_cache a b_all init k) k)
+      destruct (Levenshtein.process_row a x
+                 (Levenshtein.outer_cache a b_all init k) k)
         as [nc fr] eqn:Hpr.
       assert (Hnth : nth k b_all Ascii.zero = x).
       { exact (skipn_hd_nth k b_all x (y :: rest') Ascii.zero (eq_sym Hskip)). }
       assert (Hrest : y :: rest' = skipn (S k) b_all).
       { symmetry. exact (skipn_tl k b_all x (y :: rest') (eq_sym Hskip)). }
-      assert (Hnc : nc = BridgeDP.outer_cache a b_all init (S k)).
-      { unfold BridgeDP.outer_cache; fold BridgeDP.outer_cache.
+      assert (Hnc : nc = Levenshtein.outer_cache a b_all init (S k)).
+      { unfold Levenshtein.outer_cache; fold Levenshtein.outer_cache.
         rewrite Hnth, Hpr. reflexivity. }
       rewrite Hnc.
       apply IH; [exact Ha | discriminate | exact Hrest].
@@ -304,8 +303,8 @@ Corollary outer_result_run_eq_result :
   forall a b init,
     a <> [] ->
     b <> [] ->
-    BridgeDP.outer_result_run a b init 0 =
-    BridgeDP.outer_result a b init (length b).
+    Levenshtein.outer_result_run a b init 0 =
+    Levenshtein.outer_result a b init (length b).
 Proof.
   intros a b init Ha Hb.
   exact (outer_result_run_eq_gen b a b init 0 Ha Hb eq_refl).
@@ -349,10 +348,10 @@ Qed.
 Theorem lev_dp_eq_bridge :
   forall a b : list ascii,
     lev_dp (map ascii_to_Z a) (map ascii_to_Z b) =
-    Z.of_nat (BridgeDP.lev_dp_list a b).
+    Z.of_nat (Levenshtein.lev_dp_list a b).
 Proof.
   intros a b.
-  unfold lev_dp, BridgeDP.lev_dp_list.
+  unfold lev_dp, Levenshtein.lev_dp_list.
   rewrite !Zlength_map, !Zlength_correct.
   destruct a as [|a0 ar].
   - simpl. lia.
@@ -381,6 +380,6 @@ Corollary lev_dp_eq_levenshtein_computed :
 Proof.
   intros a b.
   rewrite lev_dp_eq_bridge. f_equal.
-  rewrite BridgeDP.lev_dp_list_rev_spec, BridgeDP.lev_spec_list_rev.
+  rewrite Levenshtein.lev_dp_list_rev_spec, Levenshtein.lev_spec_list_rev.
   reflexivity.
 Qed.
